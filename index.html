@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>ArcGIS MIL-STD-2525B Renderer Example</title>
+    <meta charset="utf-8">
+    <link rel="stylesheet" href="//js.arcgis.com/3.20/esri/css/esri.css">
+    <style>
+        html, body { margin: 0; padding: 0; width: 100%; height: 100%; }
+        #map { position: absolute; width: 100%; height: 100%; }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+
+    <script data-dojo-config="async: true, isDebug: true" src="//js.arcgis.com/3.20/init.js"></script>
+    <script>
+
+        // --------------------------------------------------
+        // Declarations
+        // --------------------------------------------------
+
+        // path to sm-bc[.min].js and renderer.css
+        var ARMYC2_PATH = './';
+
+        define('armyc2', [
+            ARMYC2_PATH + 'sm-bc.min.js'
+        ], function(_) {
+            (function() { // inject stylesheet
+                var e = document.createElement('link');
+                e.rel = 'stylesheet';
+                e.href = ARMYC2_PATH + 'renderer.css';
+                document.getElementsByTagName('head')[0].appendChild(e);
+            })();
+
+            // the global object cannot be removed, due to
+            // the archaic nature of the provided library
+
+            return armyc2; // return reference to global object
+        });
+
+        define('MilStd2525BRenderer', [
+            'dojo/_base/declare',
+            'esri/renderers/Renderer',
+            'esri/symbols/PictureMarkerSymbol',
+            'armyc2'
+        ], function(
+            declare,
+            Renderer,
+            PictureMarkerSymbol,
+            armyc2
+        ) {
+            var MilStd2525BRenderer = declare(Renderer, {
+                
+                defaultSymbol: null,
+                attributeField: null,
+                size: null,
+
+                _modifiers: null,
+
+                constructor: function(defaultSymbol, attributeField, size) {
+
+                    this.defaultSymbol = defaultSymbol;
+                    this.attributeField = attributeField;
+                    this.size = size || 45;
+
+                    var msa = armyc2.c2sd.renderer.utilities.MilStdAttributes;
+                    var mu = armyc2.c2sd.renderer.utilities.ModifiersUnits;
+
+                    this._modifiers = {};
+                    this._modifiers[msa.PixelSize] = this.size;
+                    this._modifiers[msa.KeepUnitRatio] = true;
+                    this._modifiers[msa.HideOptionalLabels] = true;
+                    this._modifiers[msa.SymbologyStandard] = 1;
+                },
+
+                getSymbol: function(graphic) {
+                    
+                    if (!graphic.attributes.hasOwnProperty(this.attributeField)) {
+                        return this.defaultSymbol;
+                    }
+
+                    var symbolCode = graphic.attributes[this.attributeField];
+                    var symbol = armyc2.c2sd.renderer.MilStdIconRenderer.Render(symbolCode, this._modifiers);
+                    var symbolBounds = symbol.getImageBounds();
+                    
+                    return new PictureMarkerSymbol(symbol.toDataUrl(), symbolBounds.width, symbolBounds.height);
+                }
+            });
+
+            return MilStd2525BRenderer;
+        });
+
+        // --------------------------------------------------
+        // Application
+        // --------------------------------------------------
+
+        require([
+            'dojo/_base/array',
+            'esri/map',
+            'esri/layers/FeatureLayer',
+            'esri/renderers/ScaleDependentRenderer',
+            'esri/geometry/Point',
+            'esri/graphic',
+            'MilStd2525BRenderer',
+            'dojo/domReady!'
+        ], function(
+            array,
+            Map,
+            FeatureLayer,
+            ScaleDependentRenderer,
+            Point,
+            Graphic,
+            MilStd2525BRenderer
+        ) {
+
+            //
+            // stuff (fixtures, helper functions)
+            //
+
+            var ALIGNMENTS = [ 'F', 'A', 'N', 'S', 'H', 'U' ];
+            var SYMBOL_CODES = [
+                'S*SPC-----*****', 'S*SPCH----*****', 'S*SPS-----*****', 
+                'S*SPSP----*****', 'S*SPSA----*****', 'S*SPCLCV--*****',
+                'S*SPCL----*****', 'S*SPCLBB--*****', 'S*SPCLCC--*****',
+                'S*SPCLDD--*****', 'S*SPCLFF--*****', 'S*SPCLLL--*****',
+                'S*SPCLLLAS*****', 'S*SPCLLLMI*****', 'S*SPCLLLSU*****',
+                'S*SPCA----*****', 'S*SPCALA--*****', 'S*SPCALS--*****',
+                'S*SPCALSM-*****', 'S*SPCALST-*****', 'S*SPCALC--*****',
+                'S*SPCM----*****', 'S*SPCMML--*****', 'S*SPCMMS--*****',
+                'S*SPCMMH--*****', 'S*SPCMMA--*****', 'S*SPCP----*****',
+                'S*SPCPSU--*****', 'S*SPCPSUM-*****', 'S*SPCPSUT-*****',
+                'S*SPCPSB--*****', 'S*SPCPSUG-*****', 'S*SPCD----*****',
+                'S*SPCU----*****', 'S*SPCUS---*****', 'S*SPCUM---*****',
+                'S*SPCUR---*****', 'S*SPCUN---*****','S*SPG-----*****',
+                'S*SPGT----*****', 'S*SPGG----*****', 'S*SPGU----*****',
+                'S*SPGC----*****', 'S*SPN-----*****', 'S*SPNI----*****',
+                'S*SPNM----*****', 'S*SPNR----*****', 'S*SPNF----*****',
+                'S*SPNS----*****', 'S*SPNH----*****', 'S*SPNN----*****',
+                'S*SPNNR---*****', 'S*SPXM----*****', 'S*SPXMC---*****',
+                'S*SPXMR---*****', 'S*SPXMF---*****', 'S*SPXH----*****',
+                'S*SPXMO---*****', 'S*SPXMP---*****', 'S*SPXMTU--*****',
+                'S*SPXMTO--*****', 'S*SPXMH---*****', 'S*SPXF----*****',
+                'S*SPXFDF--*****', 'S*SPXFTR--*****', 'S*SPXFDR--*****',
+                'S*SPXL----*****', 'S*SPXR----*****', 'S*SPXA----*****',
+                'S*SPXAR---*****', 'S*SPXAS---*****', 'S*SPXP----*****',
+                'S*SPO-----*****', 'S*SPNH----*****', 'S*SP------*****'
+            ];
+
+            // create a random symbol code
+            function randomSymbolCode() {
+                var symbolCode = SYMBOL_CODES[Math.floor(Math.random() * SYMBOL_CODES.length)];
+                var alignment = ALIGNMENTS[Math.floor(Math.random() * ALIGNMENTS.length)];                    
+                return symbolCode[0] + alignment + symbolCode.substr(2);
+            };
+            
+            // generate an array of values between mix and max by step
+            function range(min, max, step) {
+                if (!max) {
+                    max = min;
+                    min = 0;
+                }
+                step = step || 1;
+                var a = [];
+                for (var i = min; i < max; i += step) {
+                    a.push(i);
+                }
+                return a;
+            };
+
+            //
+            // application logic
+            //
+
+            // we like maps
+            var map = window.MAP = new Map('map', {
+                basemap: 'gray',
+                center: [19, 30.5],
+                zoom: 4
+            });
+
+            map.on('load', function mapOnLoadHandler() {
+
+                // create a layer to contain the data
+                var milSymLayer = new FeatureLayer({
+                    layerDefinition: {
+                        geometryType: 'esriGeometryPoint',
+                        fields: [{
+                            name: 'MILSYM',
+                            type: 'esriFieldTypeString',
+                            alias: 'MIL-STD-2525B Symbol Code'
+                        }]
+                    },
+                    featureSet: null
+                }, {
+                    surfaceType: 'canvas-2d' // hopefully, one day...
+                });
+                // create a scale-dependent renderer so that the symbols
+                // increase in size as we zoom in on the map
+                milSymLayer.setRenderer(new ScaleDependentRenderer({
+                    rendererInfos: array.map(
+                        range(map.getMinZoom(), map.getMaxZoom()),
+                        function(zoom) {
+                            return {
+                                renderer: new MilStd2525BRenderer(
+                                    null, 
+                                    'MILSYM', 
+                                    Math.min(5 + Math.floor(Math.sqrt(Math.exp(zoom, 3))), 60)
+                                ),
+                                minZoom: zoom,
+                                maxZoom: zoom
+                            };
+                        }
+                    )
+                }));
+                map.addLayer(milSymLayer);
+
+                // add a random point to the map, using the provided point if it exists
+                var addRandomPoint = function(point) {
+                    // get a random symbol code
+                    var symbolCode = randomSymbolCode();
+                    // create a random point within world bounds
+                    point = point || 
+                            new Point(
+                                Math.random() * 360 - 180, // [-180, 180] 
+                                Math.random() * 170 - 85); // [-85, 85] thanks, web mercator
+                    // add it to the feature layer
+                    milSymLayer.add(new Graphic(point, null, {
+                        MILSYM: symbolCode
+                    }));
+                };
+
+                // add a bunch of random points when the page loads
+                for (var i = 0; i < 5000; i++) {
+                    addRandomPoint();
+                }
+
+                // add a not-so-random point when the user clicks the map
+                map.on('click', function mapOnClickHandler(e) {
+                    addRandomPoint(e.mapPoint);
+                });
+            });
+        });
+    </script>
+</body>
+</html>
